@@ -1,0 +1,28 @@
+package main
+
+import (
+	"context"
+	"os"
+	"os/signal"
+)
+
+func NewCLIContext(root context.Context) (context.Context, func()) {
+	// trap Ctrl+C and call cancel on the context
+	ctx, cancel := context.WithCancel(root)
+	signals := make(chan os.Signal, 1)
+
+	signal.Notify(signals, os.Interrupt)
+
+	go func() {
+		select {
+		case <-signals:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+
+	return ctx, func() {
+		signal.Stop(signals)
+		cancel()
+	}
+}
