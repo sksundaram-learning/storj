@@ -100,10 +100,12 @@ require (
 
 // force specific versions for minio
 require (
+	github.com/Shopify/go-lua v0.0.0-20181106184032-48449c60c0a9
 	github.com/garyburd/redigo v1.0.1-0.20170216214944-0d253a66e6e1 // indirect
 	github.com/go-ole/go-ole v1.2.1 // indirect
 	github.com/hanwen/go-fuse v0.0.0-20181011180456-b760b55765be
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
+	github.com/jtolds/go-luar v0.0.0-20170419063437-0786921db8c0
 	github.com/mattn/go-colorable v0.0.9 // indirect
 
 	github.com/minio/minio v0.0.0-20180508161510-54cd29b51c38
