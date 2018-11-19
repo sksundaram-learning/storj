@@ -85,7 +85,7 @@ all-in-one: ## Deploy docker images with one storagenode locally
 	fi \
 	&& docker-compose up -d storagenode \
 	&& scripts/fix-mock-overlay \
-	&& docker-compose up storagenode satellite uplink
+	&& docker-compose up storagenode satellite
 
 ##@ Build
 
