@@ -83,9 +83,7 @@ func NewProcess(name, executable, directory string) *Process {
 }
 
 func (process *Process) Run(ctx context.Context) error {
-	cmd := exec.Command(process.Executable, "run",
-		"--base-path", process.Directory,
-	)
+	cmd := exec.Command(process.Executable, "run", "--base-path", ".")
 	cmd.Dir = process.Directory
 	cmd.Stdout, cmd.Stderr = &process.Stdout, &process.Stderr
 
@@ -96,9 +94,7 @@ func (process *Process) Run(ctx context.Context) error {
 }
 
 func (process *Process) Setup(ctx context.Context) error {
-	cmd := exec.Command(process.Executable, "setup",
-		"--base-path", process.Directory,
-	)
+	cmd := exec.Command(process.Executable, "setup", "--base-path", ".", "--overwrite")
 	cmd.Dir = process.Directory
 	cmd.Stdout, cmd.Stderr = &process.Stdout, &process.Stderr
 

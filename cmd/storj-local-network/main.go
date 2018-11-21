@@ -7,19 +7,15 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
-	monkit "gopkg.in/spacemonkeygo/monkit.v2"
 
 	"storj.io/storj/pkg/process"
 )
 
 var (
-	mon = monkit.Package()
-
 	rootCmd = &cobra.Command{
-		Use:   "captplanet",
-		Short: "Captain Planet! With our powers combined!",
+		Use:   "storj-local-network",
+		Short: "Storj full-network",
 	}
-
 	defaultDir = "local-network"
 )
 
