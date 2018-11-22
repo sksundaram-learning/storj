@@ -55,7 +55,7 @@ func TestOnlineNodes(t *testing.T) {
 	limit := 0
 	interval := time.Second
 
-	tally := newTally(pointerdb, overlayServer, kad, limit, logger, interval)
+	tally := newTally(ctx, pointerdb, overlayServer, kad, limit, logger, interval)
 	online, err := tally.onlineNodes(ctx, nodeIDs)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedOnline, online)

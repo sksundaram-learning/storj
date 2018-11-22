@@ -26,24 +26,38 @@ type Tally interface {
 }
 
 type tally struct {
-	pointerdb *pointerdb.Server
-	overlay   pb.OverlayServer
-	kademlia  *kademlia.Kademlia
-	limit     int
-	logger    *zap.Logger
-	ticker    *time.Ticker
+	pointerdb  *pointerdb.Server
+	overlay    pb.OverlayServer
+	kademlia   *kademlia.Kademlia
+	limit      int
+	logger     *zap.Logger
+	ticker     *time.Ticker
+	nodes      map[string]int64
+	nodeClient node.Client
 	//TODO:
 	//accountingDBServer
 }
 
-func newTally(pointerdb *pointerdb.Server, overlay pb.OverlayServer, kademlia *kademlia.Kademlia, limit int, logger *zap.Logger, interval time.Duration) *tally {
+func newTally(ctx context.Context, pointerdb *pointerdb.Server, overlay pb.OverlayServer, kademlia *kademlia.Kademlia, limit int, logger *zap.Logger, interval time.Duration) *tally {
+	rt, err := kademlia.GetRoutingTable(ctx)
+	if err != nil {
+		// return Error.Wrap(err)
+	}
+	self := rt.Local()
+	identity := &provider.FullIdentity{} //do i need anything in here?
+	client, err := node.NewNodeClient(identity, self, kademlia)
+	if err != nil {
+		// return Error.Wrap(err)
+	}
 	return &tally{
-		pointerdb: pointerdb,
-		overlay:   overlay,
-		kademlia:  kademlia,
-		limit:     limit,
-		logger:    logger,
-		ticker:    time.NewTicker(interval),
+		pointerdb:  pointerdb,
+		overlay:    overlay,
+		kademlia:   kademlia,
+		limit:      limit,
+		logger:     logger,
+		ticker:     time.NewTicker(interval),
+		nodes:      make(map[string]int64),
+		nodeClient: client,
 		//TODO:
 		//accountingDBServer
 	}
@@ -71,17 +85,6 @@ func (t *tally) Run(ctx context.Context) (err error) {
 func (t *tally) identifyActiveNodes(ctx context.Context) (err error) {
 	defer mon.Task()(&ctx)(&err)
 
-	rt, err := t.kademlia.GetRoutingTable(ctx)
-	if err != nil {
-		return Error.Wrap(err)
-	}
-	self := rt.Local()
-	identity := &provider.FullIdentity{} //do i need anything in here?
-	client, err := node.NewNodeClient(identity, self, t.kademlia)
-	if err != nil {
-		return Error.Wrap(err)
-	}
-
 	t.logger.Debug("entering pointerdb iterate")
 	err = t.pointerdb.Iterate(ctx, &pb.IterateRequest{Recurse: true},
 		func(it storage.Iterator) error {
@@ -105,12 +108,15 @@ func (t *tally) identifyActiveNodes(ctx context.Context) (err error) {
 				if err != nil {
 					return Error.Wrap(err)
 				}
-				go t.tallyAtRestStorage(ctx, pointer, online, client)
+				err = t.tallyAtRestStorage(ctx, pointer, online)
+				if err != nil {
+					return Error.Wrap(err)
+				}
 			}
 			return nil
 		},
 	)
-	return err
+	return t.updateRawTable()
 }
 
 func (t *tally) onlineNodes(ctx context.Context, nodeIDs []dht.NodeID) (online []*pb.Node, err error) {
@@ -127,41 +133,29 @@ func (t *tally) onlineNodes(ctx context.Context, nodeIDs []dht.NodeID) (online [
 	return online, nil
 }
 
-func (t *tally) tallyAtRestStorage(ctx context.Context, pointer *pb.Pointer, nodes []*pb.Node, client node.Client) {
+func (t *tally) tallyAtRestStorage(ctx context.Context, pointer *pb.Pointer, nodes []*pb.Node) error {
 	segmentSize := pointer.GetSegmentSize()
 	minReq := pointer.Remote.Redundancy.GetMinReq()
 	if minReq <= 0 {
-		zap.L().Error("minReq must be an int greater than 0")
-		return
+		return Error.New("minReq must be an int greater than 0")
 	}
 	pieceSize := segmentSize / int64(minReq)
 	for _, n := range nodes {
-		nodeAvail := true
-		var err error
-		ok := t.needToContact(n.Id)
+		ok, err := t.nodeClient.Ping(ctx, *n)
 		if ok {
-			nodeAvail, err = client.Ping(ctx, *n)
-			if err != nil {
-				zap.L().Error("ping failed")
-				continue
-			}
+			t.nodes[n.Id] = pieceSize
 		}
-		if nodeAvail {
-			err := t.updateGranularTable(n.Id, pieceSize)
-			if err != nil {
-				zap.L().Error("update failed")
-			}
+		if !ok || err != nil {
+			zap.L().Error("ping failed for node: " + n.Id)
+			continue
 		}
 	}
+	return nil
 }
 
-func (t *tally) needToContact(nodeID string) bool {
+func (t *tally) updateRawTable() error {
 	//TODO
-	//check db if node was updated within the last time period
-	return true
-}
-
-func (t *tally) updateGranularTable(nodeID string, pieceSize int64) error {
-	//TODO
+	//takes in-memory map of ok nodes
+	//adds all and sets all other nodes to 0
 	return nil
 }
