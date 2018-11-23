@@ -122,7 +122,7 @@ func TestPiece(t *testing.T) {
 			assert.NoError(err)
 
 			assert.Equal(tt.id, resp.GetId())
-			assert.Equal(tt.size, resp.GetSize())
+			assert.Equal(tt.size, resp.GetPieceSize())
 			assert.Equal(tt.expiration, resp.GetExpirationUnixSec())
 		})
 	}
@@ -233,7 +233,7 @@ func TestRetrieve(t *testing.T) {
 			assert.NoError(err)
 
 			// send piece database
-			err = stream.Send(&pb.PieceRetrieval{PieceData: &pb.PieceRetrieval_PieceData{Id: tt.id, Size: tt.reqSize, Offset: tt.offset}})
+			err = stream.Send(&pb.PieceRetrieval{PieceData: &pb.PieceRetrieval_PieceData{Id: tt.id, PieceSize: tt.reqSize, Offset: tt.offset}})
 			assert.NoError(err)
 
 			totalAllocated := int64(0)
@@ -274,7 +274,7 @@ func TestRetrieve(t *testing.T) {
 				}
 
 				data = fmt.Sprintf("%s%s", data, string(resp.GetContent()))
-				totalRetrieved += resp.GetSize()
+				totalRetrieved += resp.GetPieceSize()
 			}
 
 			assert.NoError(err)
@@ -546,7 +546,7 @@ func NewTestServer(t *testing.T) *TestServer {
 	check(err)
 	fiC, err := caC.NewIdentity()
 	check(err)
-	co, err := fiC.DialOption()
+	co, err := fiC.DialOption("")
 	check(err)
 
 	s, cleanup := newTestServerStruct(t)

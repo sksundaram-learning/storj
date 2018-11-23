@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 	_ "github.com/mattn/go-sqlite3" // register sqlite to sql
 	"go.uber.org/zap"
 	monkit "gopkg.in/spacemonkeygo/monkit.v2"
@@ -282,12 +282,16 @@ func (db *DB) GetBandwidthAllocations() (map[string][]*Agreement, error) {
 	agreements := make(map[string][]*Agreement)
 	for rows.Next() {
 		agreement := &Agreement{}
-		var satellite string
+		var satellite sql.NullString
 		err := rows.Scan(&satellite, &agreement.Agreement, &agreement.Signature)
 		if err != nil {
-			return nil, err
+			return agreements, err
 		}
-		agreements[satellite] = append(agreements[satellite], agreement)
+
+		if !satellite.Valid {
+			return agreements, nil
+		}
+		agreements[satellite.String] = append(agreements[satellite.String], agreement)
 	}
 	return agreements, nil
 }

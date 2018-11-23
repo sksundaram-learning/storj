@@ -17,7 +17,6 @@ import (
 )
 
 func TestUserRepository(t *testing.T) {
-
 	//testing constants
 	const (
 		lastName    = "lastName"
@@ -37,20 +36,19 @@ func TestUserRepository(t *testing.T) {
 	// to test with real db3 file use this connection string - "../db/accountdb.db3"
 	db, err := New("sqlite3", "file::memory:?mode=memory&cache=shared")
 	if err != nil {
-		assert.NoError(t, err)
+		t.Fatal(err)
 	}
 	defer ctx.Check(db.Close)
 
 	// creating tables
 	err = db.CreateTables()
 	if err != nil {
-		assert.NoError(t, err)
+		t.Fatal(err)
 	}
 
 	repository := db.Users()
 
 	t.Run("User insertion success", func(t *testing.T) {
-
 		id, err := uuid.New()
 
 		if err != nil {
@@ -73,7 +71,6 @@ func TestUserRepository(t *testing.T) {
 	})
 
 	t.Run("Can't insert user with same email twice", func(t *testing.T) {
-
 		user := &satellite.User{
 			FirstName:    name,
 			LastName:     lastName,
@@ -96,7 +93,7 @@ func TestUserRepository(t *testing.T) {
 		assert.Nil(t, err)
 		assert.NoError(t, err)
 
-		userByID, err := repository.GetByCredentials(ctx, []byte(passValid), email)
+		userByID, err := repository.Get(ctx, userByCreds.ID)
 
 		assert.Equal(t, userByID.FirstName, name)
 		assert.Equal(t, userByID.LastName, lastName)
@@ -159,7 +156,6 @@ func TestUserRepository(t *testing.T) {
 }
 
 func TestUserFromDbx(t *testing.T) {
-
 	t.Run("can't create dbo from nil dbx model", func(t *testing.T) {
 		user, err := userFromDBX(nil)
 

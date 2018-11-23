@@ -4,6 +4,7 @@
 package satellitedb
 
 import (
+	"storj.io/storj/internal/migrate"
 	"storj.io/storj/pkg/satellite"
 
 	"storj.io/storj/pkg/satellite/satellitedb/dbx"
@@ -29,21 +30,29 @@ func New(driver, source string) (satellite.DB, error) {
 	return database, nil
 }
 
-// Users is getter for Users repository
+// Users is getter a for Users repository
 func (db *Database) Users() satellite.Users {
 	return &users{db.db}
 }
 
-// Companies is getter for Companies repository
+// Companies is a getter for Companies repository
 func (db *Database) Companies() satellite.Companies {
 	return &companies{db.db}
 }
 
+// Projects is a getter for Projects repository
+func (db *Database) Projects() satellite.Projects {
+	return &projects{db.db}
+}
+
+// ProjectMembers is a getter for ProjectMembers repository
+func (db *Database) ProjectMembers() satellite.ProjectMembers {
+	return &projectMembers{db.db}
+}
+
 // CreateTables is a method for creating all tables for satellitedb
 func (db *Database) CreateTables() error {
-	_, err := db.db.Exec(db.db.Schema())
-
-	return err
+	return migrate.Create("satellitedb", db.db)
 }
 
 // Close is used to close db connection

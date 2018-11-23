@@ -14,7 +14,6 @@ import (
 )
 
 func TestCompanyRepository(t *testing.T) {
-
 	//testing constants
 	const (
 		// for user
@@ -47,14 +46,14 @@ func TestCompanyRepository(t *testing.T) {
 	// to test with real db3 file use this connection string - "../db/accountdb.db3"
 	db, err := New("sqlite3", "file::memory:?mode=memory&cache=shared")
 	if err != nil {
-		assert.NoError(t, err)
+		t.Fatal(err)
 	}
 	defer ctx.Check(db.Close)
 
 	// creating tables
 	err = db.CreateTables()
 	if err != nil {
-		assert.NoError(t, err)
+		t.Fatal(err)
 	}
 
 	// repositories
@@ -64,7 +63,6 @@ func TestCompanyRepository(t *testing.T) {
 	var user *satellite.User
 
 	t.Run("Can't insert company without user", func(t *testing.T) {
-
 		company := &satellite.Company{
 			Name:       companyName,
 			Address:    address,
@@ -82,7 +80,6 @@ func TestCompanyRepository(t *testing.T) {
 	})
 
 	t.Run("Insert company successfully", func(t *testing.T) {
-
 		user, err = users.Insert(ctx, &satellite.User{
 			FirstName:    userName,
 			LastName:     lastName,
@@ -197,11 +194,10 @@ func TestCompanyRepository(t *testing.T) {
 }
 
 func TestCompanyFromDbx(t *testing.T) {
-
 	t.Run("can't create dbo from nil dbx model", func(t *testing.T) {
-		user, err := companyFromDBX(nil)
+		company, err := companyFromDBX(nil)
 
-		assert.Nil(t, user)
+		assert.Nil(t, company)
 		assert.NotNil(t, err)
 		assert.Error(t, err)
 	})
@@ -211,9 +207,9 @@ func TestCompanyFromDbx(t *testing.T) {
 			Id: []byte("qweqwe"),
 		}
 
-		user, err := companyFromDBX(&dbxCompany)
+		company, err := companyFromDBX(&dbxCompany)
 
-		assert.Nil(t, user)
+		assert.Nil(t, company)
 		assert.NotNil(t, err)
 		assert.Error(t, err)
 	})
@@ -225,13 +221,13 @@ func TestCompanyFromDbx(t *testing.T) {
 		assert.Nil(t, err)
 
 		dbxCompany := dbx.Company{
-			Id:     []byte(companyID.String()),
+			Id:     companyID[:],
 			UserId: []byte("qweqwe"),
 		}
 
-		user, err := companyFromDBX(&dbxCompany)
+		company, err := companyFromDBX(&dbxCompany)
 
-		assert.Nil(t, user)
+		assert.Nil(t, company)
 		assert.NotNil(t, err)
 		assert.Error(t, err)
 	})

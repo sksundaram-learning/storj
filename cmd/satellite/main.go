@@ -6,27 +6,31 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
 	"text/tabwriter"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 	"github.com/spf13/cobra"
-	"go.uber.org/zap"
+	"github.com/zeebo/errs"
 
-	// "storj.io/storj/pkg/audit"
 	"storj.io/storj/pkg/auth/grpcauth"
 	"storj.io/storj/pkg/bwagreement"
+	dbmanager "storj.io/storj/pkg/bwagreement/database-manager"
 	"storj.io/storj/pkg/cfgstruct"
+	"storj.io/storj/pkg/datarepair/checker"
+	"storj.io/storj/pkg/datarepair/queue"
+	"storj.io/storj/pkg/datarepair/repairer"
 	"storj.io/storj/pkg/kademlia"
 	"storj.io/storj/pkg/overlay"
-	mockOverlay "storj.io/storj/pkg/overlay/mocks"
 	"storj.io/storj/pkg/pb"
 	"storj.io/storj/pkg/pointerdb"
 	"storj.io/storj/pkg/process"
 	"storj.io/storj/pkg/provider"
 	"storj.io/storj/pkg/statdb"
+	"storj.io/storj/storage/redis"
 )
 
 var (
@@ -49,20 +53,23 @@ var (
 		Short: "Diagnostic Tool support",
 		RunE:  cmdDiag,
 	}
+	qdiagCmd = &cobra.Command{
+		Use:   "qdiag",
+		Short: "Repair Queue Diagnostic Tool support",
+		RunE:  cmdQDiag,
+	}
 
 	runCfg struct {
 		Identity  provider.IdentityConfig
 		Kademlia  kademlia.Config
 		PointerDB pointerdb.Config
-		// Checker     checker.Config
-		// Repairer    repairer.Config
-		Overlay     overlay.Config
-		MockOverlay mockOverlay.Config
-		StatDB      statdb.Config
-		// RepairQueue   queue.Config
-		// RepairChecker checker.Config
-		// Repairer      repairer.Config
+		Overlay   overlay.Config
+		StatDB    statdb.Config
+		Checker   checker.Config
+		Repairer  repairer.Config
+
 		// Audit audit.Config
+		BwAgreement bwagreement.Config
 	}
 	setupCfg struct {
 		BasePath  string `default:"$CONFDIR" help:"base path for setup"`
@@ -71,35 +78,39 @@ var (
 		Overwrite bool `default:"false" help:"whether to overwrite pre-existing configuration files"`
 	}
 	diagCfg struct {
-		BasePath string `default:"$CONFDIR" help:"base path for setup"`
+		DatabaseURL string `help:"the database connection string to use" default:"sqlite3://$CONFDIR/bw.db"`
+	}
+	qdiagCfg struct {
+		DatabaseURL string `help:"the database connection string to use" default:"redis://127.0.0.1:6378?db=1&password=abc123"`
+		QListLimit  int    `help:"maximum segments that can be requested" default:"1000"`
 	}
 
 	defaultConfDir = "$HOME/.storj/satellite"
-	defaultDiagDir = "postgres://postgres@localhost/pointerdb?sslmode=disable"
 )
 
 func init() {
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(setupCmd)
 	rootCmd.AddCommand(diagCmd)
+	rootCmd.AddCommand(qdiagCmd)
 	cfgstruct.Bind(runCmd.Flags(), &runCfg, cfgstruct.ConfDir(defaultConfDir))
 	cfgstruct.Bind(setupCmd.Flags(), &setupCfg, cfgstruct.ConfDir(defaultConfDir))
-	cfgstruct.Bind(diagCmd.Flags(), &diagCfg, cfgstruct.ConfDir(defaultDiagDir))
+	cfgstruct.Bind(diagCmd.Flags(), &diagCfg, cfgstruct.ConfDir(defaultConfDir))
+	cfgstruct.Bind(qdiagCmd.Flags(), &qdiagCfg, cfgstruct.ConfDir(defaultConfDir))
 }
 
 func cmdRun(cmd *cobra.Command, args []string) (err error) {
-	var o provider.Responsibility = runCfg.Overlay
-	if runCfg.MockOverlay.Nodes != "" {
-		o = runCfg.MockOverlay
-	}
 	return runCfg.Identity.Run(
 		process.Ctx(cmd),
 		grpcauth.NewAPIKeyInterceptor(),
 		runCfg.Kademlia,
 		runCfg.PointerDB,
-		o,
+		runCfg.Overlay,
 		runCfg.StatDB,
+		runCfg.Checker,
+		runCfg.Repairer,
 		// runCfg.Audit,
+		runCfg.BwAgreement,
 	)
 }
 
@@ -150,16 +161,20 @@ func cmdSetup(cmd *cobra.Command, args []string) (err error) {
 
 func cmdDiag(cmd *cobra.Command, args []string) (err error) {
 	// open the psql db
-	dbpath := diagCfg.BasePath
-	s, err := bwagreement.NewServer("postgres", dbpath, zap.NewNop())
+	u, err := url.Parse(diagCfg.DatabaseURL)
 	if err != nil {
-		fmt.Println("Storagenode database couldnt open:", dbpath)
+		return errs.New("Invalid Database URL: %+v", err)
+	}
+
+	dbm, err := dbmanager.NewDBManager(u.Scheme, u.Path)
+	if err != nil {
 		return err
 	}
+
 	//get all bandwidth aggrements rows already ordered
-	baRows, err := s.GetBandwidthAllocations(context.Background())
+	baRows, err := dbm.GetBandwidthAllocations(context.Background())
 	if err != nil {
-		fmt.Printf("error reading satellite database %v: %v\n", dbpath, err)
+		fmt.Printf("error reading satellite database %v: %v\n", u.Path, err)
 		return err
 	}
 
@@ -220,8 +235,36 @@ func cmdDiag(cmd *cobra.Command, args []string) (err error) {
 	}
 
 	// display the data
-	err = w.Flush()
-	return err
+	return w.Flush()
+}
+
+func cmdQDiag(cmd *cobra.Command, args []string) (err error) {
+	// open the redis db
+	dbpath := qdiagCfg.DatabaseURL
+
+	redisQ, err := redis.NewQueueFrom(dbpath)
+	if err != nil {
+		return err
+	}
+
+	queue := queue.NewQueue(redisQ)
+	list, err := queue.Peekqueue(qdiagCfg.QListLimit)
+	if err != nil {
+		return err
+	}
+
+	// initialize the table header (fields)
+	const padding = 3
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, padding, ' ', tabwriter.AlignRight|tabwriter.Debug)
+	fmt.Fprintln(w, "Path\tLost Pieces\t")
+
+	// populate the row fields
+	for _, v := range list {
+		fmt.Fprint(w, v.GetPath(), "\t", v.GetLostPieces(), "\t")
+	}
+
+	// display the data
+	return w.Flush()
 }
 
 func main() {
