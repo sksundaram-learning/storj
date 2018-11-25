@@ -5,10 +5,14 @@ package tally
 
 import (
 	"context"
+	"io/ioutil"
 	"math/rand"
+	"os"
 	"strconv"
 	"testing"
 	"time"
+
+	"storj.io/storj/pkg/provider"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
@@ -51,7 +55,10 @@ func TestCategorize(t *testing.T) {
 		}
 	}
 	overlayServer := mocks.NewOverlay(nodes)
-	kad := &kademlia.NewKademlia()
+	rootdir, cleanup := mktempdir(t, "kademlia")
+	defer cleanup()
+	kad, err := kademlia.NewKademlia(node.IDFromString("foo"), []pb.Node{}, "127.0.0.1:8080", nil, &provider.FullIdentity{}, rootdir, 1)
+	assert.NoError(t, err)
 	limit := 0
 	interval := time.Second
 
@@ -67,4 +74,13 @@ func TestTallyAtRestStorage(t *testing.T) {
 
 func TestUpdateRawTable(t *testing.T) {
 
+}
+
+func mktempdir(t *testing.T, dir string) (string, func()) {
+	rootdir, err := ioutil.TempDir("", dir)
+	assert.NoError(t, err)
+	cleanup := func() {
+		assert.NoError(t, os.RemoveAll(rootdir))
+	}
+	return rootdir, cleanup
 }
