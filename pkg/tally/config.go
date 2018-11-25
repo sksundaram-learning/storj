@@ -25,7 +25,7 @@ func (c Config) initialize(ctx context.Context) (Tally, error) {
 	pointerdb := pointerdb.LoadFromContext(ctx)
 	overlay := overlay.LoadServerFromContext(ctx)
 	kademlia := kademlia.LoadFromContext(ctx)
-	return newTally(ctx, pointerdb, overlay, kademlia, 0, zap.L(), c.Interval), nil
+	return newTally(ctx, pointerdb, overlay, kademlia, 0, zap.L(), c.Interval)
 }
 
 // Run runs the tally with configured values
