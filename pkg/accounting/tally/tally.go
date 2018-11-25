@@ -10,6 +10,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"go.uber.org/zap"
 
+	dbx "storj.io/storj/pkg/accounting/dbx"
 	"storj.io/storj/pkg/dht"
 	"storj.io/storj/pkg/kademlia"
 	"storj.io/storj/pkg/node"
@@ -34,8 +35,7 @@ type tally struct {
 	ticker     *time.Ticker
 	nodes      map[string]int64
 	nodeClient node.Client
-	//TODO:
-	//accountingDBServer
+	DB         *dbx.DB
 }
 
 func newTally(ctx context.Context, pointerdb *pointerdb.Server, overlay pb.OverlayServer, kademlia *kademlia.Kademlia, limit int, logger *zap.Logger, interval time.Duration) *tally {
