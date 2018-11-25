@@ -29,7 +29,7 @@ func TestIdentifyActiveNodes(t *testing.T) {
 
 }
 
-func TestOnlineNodes(t *testing.T) {
+func TestCategorize(t *testing.T) {
 	logger := zap.NewNop()
 	pointerdb := pointerdb.NewServer(teststore.New(), &overlay.Cache{}, logger, pointerdb.Config{}, nil)
 
@@ -51,12 +51,12 @@ func TestOnlineNodes(t *testing.T) {
 		}
 	}
 	overlayServer := mocks.NewOverlay(nodes)
-	kad := &kademlia.Kademlia{}
+	kad := &kademlia.NewKademlia()
 	limit := 0
 	interval := time.Second
 
 	tally := newTally(ctx, pointerdb, overlayServer, kad, limit, logger, interval)
-	online, err := tally.onlineNodes(ctx, nodeIDs)
+	online, err := tally.categorize(ctx, nodeIDs)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedOnline, online)
 }

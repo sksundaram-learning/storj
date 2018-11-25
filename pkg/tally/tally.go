@@ -35,7 +35,7 @@ type tally struct {
 	ticker     *time.Ticker
 	nodes      map[string]int64
 	nodeClient node.Client
-	DB         *dbx.DB
+	// DB         *dbx.DB
 }
 
 func newTally(ctx context.Context, pointerdb *pointerdb.Server, overlay pb.OverlayServer, kademlia *kademlia.Kademlia, limit int, logger *zap.Logger, interval time.Duration) *tally {
@@ -58,8 +58,7 @@ func newTally(ctx context.Context, pointerdb *pointerdb.Server, overlay pb.Overl
 		ticker:     time.NewTicker(interval),
 		nodes:      make(map[string]int64),
 		nodeClient: client,
-		//TODO:
-		//accountingDBServer
+		//TODO: DB
 	}
 }
 
@@ -104,7 +103,7 @@ func (t *tally) identifyActiveNodes(ctx context.Context) (err error) {
 				for _, p := range pieces {
 					nodeIDs = append(nodeIDs, node.IDFromString(p.NodeId))
 				}
-				online, err := t.onlineNodes(ctx, nodeIDs)
+				online, err := t.categorize(ctx, nodeIDs)
 				if err != nil {
 					return Error.Wrap(err)
 				}
@@ -119,7 +118,7 @@ func (t *tally) identifyActiveNodes(ctx context.Context) (err error) {
 	return t.updateRawTable()
 }
 
-func (t *tally) onlineNodes(ctx context.Context, nodeIDs []dht.NodeID) (online []*pb.Node, err error) {
+func (t *tally) categorize(ctx context.Context, nodeIDs []dht.NodeID) (online []*pb.Node, err error) {
 	responses, err := t.overlay.BulkLookup(ctx, utils.NodeIDsToLookupRequests(nodeIDs))
 	if err != nil {
 		return []*pb.Node{}, err
@@ -128,6 +127,8 @@ func (t *tally) onlineNodes(ctx context.Context, nodeIDs []dht.NodeID) (online [
 	for _, n := range nodes {
 		if n != nil {
 			online = append(online, n)
+		} else {
+			t.nodes[n.Id] = 0
 		}
 	}
 	return online, nil
@@ -141,12 +142,18 @@ func (t *tally) tallyAtRestStorage(ctx context.Context, pointer *pb.Pointer, nod
 	}
 	pieceSize := segmentSize / int64(minReq)
 	for _, n := range nodes {
-		ok, err := t.nodeClient.Ping(ctx, *n)
-		if ok {
-			t.nodes[n.Id] = pieceSize
+		connected, err := t.nodeClient.Ping(ctx, *n)
+		if connected {
+			val, ok := t.nodes[n.Id]
+			if ok {
+				t.nodes[n.Id] = val + pieceSize
+			} else {
+				t.nodes[n.Id] = pieceSize
+			}
 		}
-		if !ok || err != nil {
+		if !connected || err != nil {
 			zap.L().Error("ping failed for node: " + n.Id)
+			t.nodes[n.Id] = 0
 			continue
 		}
 	}
