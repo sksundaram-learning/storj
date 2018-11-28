@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+
+	"storj.io/storj/pkg/accounting/accountingdb"
 )
 
 // Rollup is the service for totalling data on storage nodes for 1, 7, 30 day intervals
@@ -16,19 +18,21 @@ type Rollup interface {
 }
 
 type rollup struct {
-	logger *zap.Logger
-	ticker *time.Ticker
-	//TODO:
-	//accountingDBServer
+	logger       *zap.Logger
+	ticker       *time.Ticker
+	accountingDB *accountingdb.Database
 }
 
-func newRollup(logger *zap.Logger, interval time.Duration) *rollup {
-	return &rollup{
-		logger: logger,
-		ticker: time.NewTicker(interval),
-		//TODO:
-		//accountingDBServer
+func newRollup(logger *zap.Logger, interval time.Duration) (*rollup, error) {
+	db, err := accountingdb.New("", "") //TODO: what values go here?
+	if err != nil {
+		return nil, Error.Wrap(err)
 	}
+	return &rollup{
+		logger:       logger,
+		ticker:       time.NewTicker(interval),
+		accountingDB: db,
+	},  nil
 }
 
 // Run the rollup loop

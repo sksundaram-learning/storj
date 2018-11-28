@@ -19,7 +19,7 @@ type Config struct {
 
 // Initialize a rollup struct
 func (c Config) initialize(ctx context.Context) (Rollup, error) {
-	return newRollup(zap.L(), c.Interval), nil
+	return newRollup(zap.L(), c.Interval)
 }
 
 // Run runs the rollup with configured values
