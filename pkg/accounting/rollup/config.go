@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"go.uber.org/zap"
-
+	"storj.io/storj/pkg/accounting"
 	"storj.io/storj/pkg/provider"
 	"storj.io/storj/pkg/accounting/accountingdb"
 )

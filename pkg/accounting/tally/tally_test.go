@@ -61,7 +61,6 @@ func TestCategorize(t *testing.T) {
 	assert.NoError(t, err)
 	limit := 0
 	interval := time.Second
-
 	db, err := accountingdb.New("sqlite3://file::memory:?mode=memory&cache=shared")
 	assert.NoError(t, err)
 	defer func() {
