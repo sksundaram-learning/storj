@@ -9,7 +9,7 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 	"go.uber.org/zap"
-	
+
 	"storj.io/storj/pkg/accounting/accountingdb"
 	"storj.io/storj/pkg/dht"
 	"storj.io/storj/pkg/kademlia"
@@ -26,18 +26,18 @@ type Tally interface {
 }
 
 type tally struct {
-	pointerdb    *pointerdb.Server
-	overlay      pb.OverlayServer
-	kademlia     *kademlia.Kademlia
-	limit        int
-	logger       *zap.Logger
-	ticker       *time.Ticker
-	nodes        map[string]int64
-	nodeClient   node.Client
-	accountingDB *accountingdb.Database
+	pointerdb  *pointerdb.Server
+	overlay    pb.OverlayServer
+	kademlia   *kademlia.Kademlia
+	limit      int
+	logger     *zap.Logger
+	ticker     *time.Ticker
+	nodes      map[string]int64
+	nodeClient node.Client
+	db         *accountingdb.Database
 }
 
-func newTally(ctx context.Context, pointerdb *pointerdb.Server, overlay pb.OverlayServer, kademlia *kademlia.Kademlia, limit int, logger *zap.Logger, interval time.Duration) (*tally, error) {
+func newTally(ctx context.Context, db *accountingdb.Database, pointerdb *pointerdb.Server, overlay pb.OverlayServer, kademlia *kademlia.Kademlia, limit int, interval time.Duration, logger *zap.Logger) (*tally, error) {
 	rt, err := kademlia.GetRoutingTable(ctx)
 	if err != nil {
 		return nil, Error.Wrap(err)
@@ -45,10 +45,6 @@ func newTally(ctx context.Context, pointerdb *pointerdb.Server, overlay pb.Overl
 	self := rt.Local()
 	identity, err := node.NewFullIdentity(ctx, 12, 4) //TODO: what values go here?
 	client, err := node.NewNodeClient(identity, self, kademlia)
-	if err != nil {
-		return nil, Error.Wrap(err)
-	}
-	db, err := accountingdb.New("", "") //TODO: what values go here?
 	if err != nil {
 		return nil, Error.Wrap(err)
 	}
@@ -61,7 +57,7 @@ func newTally(ctx context.Context, pointerdb *pointerdb.Server, overlay pb.Overl
 		ticker:     time.NewTicker(interval),
 		nodes:      make(map[string]int64),
 		nodeClient: client,
-		accountingDB: db,
+		db:         db,
 	}, nil
 }
 
@@ -78,6 +74,10 @@ func (t *tally) Run(ctx context.Context) (err error) {
 		select {
 		case <-t.ticker.C: // wait for the next interval to happen
 		case <-ctx.Done(): // or the tally is canceled via context
+			err = t.db.Close()
+			if err != nil {
+				zap.L().Error("error closing connection to accountingdb", zap.Error(err))
+			}
 			return ctx.Err()
 		}
 	}
