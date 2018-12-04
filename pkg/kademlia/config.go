@@ -61,7 +61,6 @@ func (c Config) Run(ctx context.Context, server *provider.Provider) (
 
 	defer mon.Task()(&ctx)(&err)
 
-	// TODO(coyle): I'm thinking we just remove  this function and grab from the config.
 	in, err := GetIntroNode(c.BootstrapAddr)
 	if err != nil {
 		return err
