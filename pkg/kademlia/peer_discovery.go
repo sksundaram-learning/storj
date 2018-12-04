@@ -43,7 +43,7 @@ func newPeerDiscovery(nodes []*pb.Node, client node.Client, target storj.NodeID,
 
 func (lookup *peerDiscovery) Run(ctx context.Context) error {
 	if lookup.queue.Len() == 0 {
-		return nil // TODO: should we return an error here?
+		return nil 
 	}
 
 	wg := sync.WaitGroup{}
